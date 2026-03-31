@@ -1,0 +1,57 @@
+---
+title: "Serve Receive Predictability — 2025 Season"
+author: "Lyla Traylor"
+format: html
+engine: knitr
+---
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+
+# R libraries
+library(reticulate)
+library(datavolley)
+library(tidyverse)
+```
+
+```{python}
+#| label: python-setup
+
+# Python libraries
+import pandas as pd
+```
+
+
+## Data ingestion (R)
+```{r}
+# R code for parsing and EDA
+library(datavolley)
+dv <- read_dv("/Users/lylatraylor/sr-predict-proj/SR-prediction/DUKE-CAL.dvw")
+```
+```{r}
+#| label: extract-plays
+
+plays <- plays(dv)
+glimpse(plays)
+```
+
+
+## Export for Python Modeling
+```{r}
+#| label: export-csv
+#| eval: false   # flip to true once data is clean
+
+write_csv(plays, "data/cleaned_plays.csv")
+```
+
+
+## Modeling (Python)
+```{python}
+#| label: load-cleaned-data
+#| eval: false   # flip to true once CSV exists
+
+df = pd.read_csv("data/cleaned_plays.csv")
+df.head()
+```
