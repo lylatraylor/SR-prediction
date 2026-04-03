@@ -19,12 +19,13 @@ library(readr)
 # extract_serve_receive_plays()
 #
 # Parameters:
-#   dvw_path      : character, path to your .dvw file
-#   focus_team_id : numeric team ID of the team you are
-#                   analyzing (determines sign of score_diff)
+#   dvw_path        : character, path to your .dvw file
+#   focus_team_id   : numeric team ID of the team you are
+#                     analyzing (determines sign of score_diff)
+#   focus_team_name : name of team you are analyzing
 # ============================================================
 
-extract_serve_receive_plays <- function(dvw_path, focus_team_id) {
+extract_serve_receive_plays <- function(dvw_path, focus_team_id, focus_team_name) {
   
   # read and parse the dvw file
   dv       <- dv_read(dvw_path)
@@ -98,13 +99,24 @@ extract_serve_receive_plays <- function(dvw_path, focus_team_id) {
       attack_eval_code  = evaluation_code
     )
   
+  point_outcome <- plays_df |>
+    filter(!is.na(point_won_by)) |>
+    group_by(point_id) |>
+    slice(1) |>
+    ungroup() |>
+    select(
+      point_id,
+      point_won_by
+    )
+  
   # join together by reception — every serve-receive point must have a reception
   # set and attack use left_join in case absent (ace, overpass, etc.)
   
   result <- serve_first |>
     inner_join(reception_first, by = "point_id") |>
     left_join(set_first,        by = "point_id") |>
-    left_join(attack_first,     by = "point_id")
+    left_join(attack_first,     by = "point_id") |>
+    left_join(point_outcome,    by = "point_id")
   
   # compute score_diff from the focus team's perspective
   # (positive means focus team is winning at start of point)
@@ -137,6 +149,14 @@ extract_serve_receive_plays <- function(dvw_path, focus_team_id) {
   result <- result |>
     filter(serving_team != receiving_team)
   
+  # lag feature: did we win the previous serve-receive point? ---
+  result <- result |>
+    arrange(set_number, point_id) |>
+    mutate(
+      prev_point_won = lag(point_won_by) == focus_team_name,
+      prev_attacker  = lag(attacker_id)   # who was set last time
+    )
+
   # column ordering for readability
   
   result <- result |>
@@ -156,6 +176,8 @@ extract_serve_receive_plays <- function(dvw_path, focus_team_id) {
       attacker_id, attack_code, attack_eval_code,
       home_score_start_of_point, visiting_score_start_of_point,
       score_diff,
+       point_won_by,     
+      prev_point_won, 
       is_ace, is_overpass, out_of_system, no_set, no_attack
     )
   return(result)
@@ -164,10 +186,11 @@ extract_serve_receive_plays <- function(dvw_path, focus_team_id) {
 # run and export (reads arguments from command line) ---
 args <- commandArgs(trailingOnly = TRUE)
 
-dvw_path      <- args[1]
-focus_team_id <- as.numeric(args[2])
-output_path   <- args[3]
+dvw_path        <- args[1]
+focus_team_id   <- as.numeric(args[2])
+focus_team_name <- args[3]
+output_path     <- args[4]
 
-result <- extract_serve_receive_plays(dvw_path, focus_team_id)
+result <- extract_serve_receive_plays(dvw_path, focus_team_id, focus_team_name)
 write_csv(result, output_path)
 cat("Export complete:", nrow(result), "rows written to", output_path, "\n")
