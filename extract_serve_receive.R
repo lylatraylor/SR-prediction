@@ -118,6 +118,25 @@ extract_serve_receive_plays <- function(dvw_path, focus_team_id, focus_team_name
     left_join(attack_first,     by = "point_id") |>
     left_join(point_outcome,    by = "point_id")
   
+
+  # --- player name lookup ---
+  # extract id -> name mapping from all rows in the file
+  player_names <- plays_df |>
+    filter(!is.na(player_id), !is.na(player_name)) |>
+    select(player_id, player_name) |>
+    distinct()
+
+  # join names for each role
+  result <- result |>
+    left_join(player_names |> rename(server_name   = player_name),
+              by = c("server_id"   = "player_id")) |>
+    left_join(player_names |> rename(receiver_name = player_name),
+              by = c("receiver_id" = "player_id")) |>
+    left_join(player_names |> rename(setter_name   = player_name),
+              by = c("setter_id"   = "player_id")) |>
+    left_join(player_names |> rename(attacker_name = player_name),
+              by = c("attacker_id" = "player_id"))
+  
   # compute score_diff from the focus team's perspective
   # (positive means focus team is winning at start of point)
   
@@ -170,14 +189,14 @@ extract_serve_receive_plays <- function(dvw_path, focus_team_id, focus_team_name
       visiting_p1:visiting_p6,
       home_player_id1:home_player_id6,
       visiting_player_id1:visiting_player_id6,
-      server_id, serve_eval_code,
-      receiver_id, receive_eval_code,
-      setter_id, set_code, set_type,
-      attacker_id, attack_code, attack_eval_code,
+      server_id, server_name, serve_eval_code,
+      receiver_id, receiver_name, receive_eval_code,
+      setter_id, setter_name, set_code, set_type,
+      attacker_id, attacker_name, attack_code, attack_eval_code,
       home_score_start_of_point, visiting_score_start_of_point,
       score_diff,
-       point_won_by,     
-      prev_point_won, 
+      point_won_by,
+      prev_point_won,
       is_ace, is_overpass, out_of_system, no_set, no_attack
     )
   return(result)
