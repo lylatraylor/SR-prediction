@@ -217,18 +217,49 @@ def build_features(df, focus_team, le_server=None, le_player=None, le_prev=None)
         ['game_number', 'set_number', 'point_id']
     ).reset_index(drop=True)
 
+    # detect consecutive serve-receive points:
+    # point_id exactly 1 greater than previous row in same set and game
+    # means they did not side out — they stayed in serve receive
+    df_focus['prev_point_id'] = df_focus['point_id'].shift(1)
+    df_focus['prev_set']      = df_focus['set_number'].shift(1)
+    df_focus['prev_game']     = df_focus['game_number'].shift(1)
+
+    df_focus['is_consecutive_sr'] = (
+        (df_focus['point_id']    == df_focus['prev_point_id'] + 1) &
+        (df_focus['set_number']  == df_focus['prev_set']) &
+        (df_focus['game_number'] == df_focus['prev_game'])
+    )
+
+    # prev_point_won: only meaningful if consecutive serve-receive point
+    # otherwise 0.0 (neutral — no streak info)
     df_focus['prev_attacker_id'] = df_focus['attacker_id'].shift(1)
-    df_focus['prev_point_won']   = (
-        df_focus['point_won_by'].shift(1) == focus_team
-    ).astype(float)
+    df_focus['prev_point_won']   = np.where(
+        df_focus['is_consecutive_sr'],
+        (df_focus['point_won_by'].shift(1) == focus_team).astype(float),
+        0.0
+    )
+
+    # prev_attacker_enc: only valid if consecutive serve-receive point
+    # otherwise 'none' (not applicable)
+    df_focus['prev_attacker_id_clean'] = np.where(
+        df_focus['is_consecutive_sr'],
+        df_focus['prev_attacker_id'].fillna('none').astype(str),
+        'none'
+    )
 
     if le_prev is None:
         le_prev = LabelEncoder()
-        le_prev.fit(df_focus['prev_attacker_id'].fillna('none').astype(str))
+        le_prev.fit(df_focus['prev_attacker_id_clean'].astype(str))
 
-    df_focus['prev_attacker_enc'] = df_focus['prev_attacker_id'].fillna('none').astype(str).apply(
+    df_focus['prev_attacker_enc'] = df_focus['prev_attacker_id_clean'].apply(
         lambda x: le_prev.transform([x])[0] if x in le_prev.classes_ else -1
     )
+
+    # drop helper columns
+    df_focus = df_focus.drop(columns=[
+        'prev_point_id', 'prev_set', 'prev_game',
+        'is_consecutive_sr', 'prev_attacker_id', 'prev_attacker_id_clean'
+    ])
 
     encoders = {
         'server': le_server,
